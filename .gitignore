@@ -43,3 +43,5 @@ install_manifest.txt
 #other folders
 foo
 download
+
+*.csv
