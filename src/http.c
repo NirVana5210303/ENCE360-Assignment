@@ -106,9 +106,7 @@ Buffer* http_query(char *host, char *page, int port)
 
     if (file_size + BUF_SIZE > http_file->length)
     {
-      // Someone smarter than me said that you should double allocated size when
-      // resizing. I believe them.
-      http_file->length = http_file->length * 2;
+      http_file->length = http_file->length + BUF_SIZE;
       http_file->data = realloc(http_file->data, http_file->length);
     }
   } while(recv_bits > 0); // When there is no data left, it will recv 0 bits

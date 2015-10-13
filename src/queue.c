@@ -52,7 +52,28 @@ Queue *queue_alloc(int size)
   return q;
 }
 
-void queue_free(Queue *queue) {
+void queue_free(Queue *queue)
+{
+  int test = pthread_cond_destroy(&queue->full);
+  if (test == EBUSY)
+  {
+    handle_error("ERROR: Waiting on put");
+  }
+  test = pthread_cond_destroy(&queue->empty);
+  if (test == EBUSY)
+  {
+    handle_error("ERROR: Waiting on get");
+  }
+  if (queue->head != NULL)
+  {
+    while (queue->head->next != NULL)
+    {
+      Node* to_delete = queue->head;
+      queue->head = queue->head->next;
+      free(to_delete);
+    }
+    free(queue->head);
+  }
   free(queue);
   return;
 }
