@@ -1,3 +1,5 @@
+//TODO: add timeout for unreliable connections when reveiving
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -10,6 +12,7 @@
 #include "http.h"
 
 #define BUF_SIZE 1024
+#define REQ_LEN 53 // base length of request without url and page
 
 Buffer *new_buffer(size_t size)
 {
@@ -41,6 +44,9 @@ Buffer* http_query(char *host, char *page, int port)
   struct addrinfo hints, *servinfo;
   int file_size = 0; // The size of the entire http packet recieved
   Buffer *http_file = new_buffer(BUF_SIZE); // buffer for the http file
+  char *request = NULL;
+  int request_length;
+
 
   sprintf(addr_port, "%d", port);
   memset(&hints, 0, sizeof hints);
@@ -60,23 +66,37 @@ Buffer* http_query(char *host, char *page, int port)
     exit(1);
   }
 
-  char* msg = "GET /sqlrest/CUSTOMER/3/ HTTP/1.0\r\nHost: www.thomas-bayer.com\r\nUser-Agent: downloader/1.0\r\n\r\n";
-  printf("Request:\n%s", msg);
-  int msg_len = strlen(msg);
+  //"GET /sqlrest/CUSTOMER/3/ HTTP/1.0\r\nHost: www.thomas-bayer.com\r\nUser-Agent: downloader/1.0\r\n\r\n";
+  if (page[0] == '/')
+  {
+    request_length = REQ_LEN + strlen(host) + strlen (page);
+    request = (char*)calloc(request_length, sizeof(char));
+    sprintf(request, "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: downloader/1.0\r\n\r\n", page, host);
+  }
+  else
+  {
+    request_length = REQ_LEN + strlen(host) + strlen (page) + 1;
+    request = (char*)calloc(request_length, sizeof(char));
+    sprintf(request, "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: downloader/1.0\r\n\r\n", page, host);
+  }
+  printf("\n\n%s\n\n", request);
+
   int sent = 0;
   do {
-  	rc = send(sockfd, msg+sent, msg_len-sent, 0);
+  	rc = send(sockfd, request + sent, request_length - sent, 0);
   	if (rc == -1) {
   	  perror("send");
   	  exit(1);
   	}
   	sent += rc;
-  } while (sent < msg_len);
+  } while (sent < request_length);
+
+
 
   //char buffer[BUF_SIZE];
   int rec_bits;
   do {
-    rec_bits = recv(sockfd, http_file->data, BUF_SIZE, 0);
+    rec_bits = recv(sockfd, http_file->data + file_size, BUF_SIZE, 0);
     file_size += rec_bits;
 
     if (file_size + BUF_SIZE > http_file->length)
@@ -84,7 +104,8 @@ Buffer* http_query(char *host, char *page, int port)
         http_file->length = http_file->length * 2;
         http_file->data = realloc(http_file->data, http_file->length);
     }
-  } while(rc == BUF_SIZE);
+    printf("%d bytes recv\n", rec_bits);
+  } while(rec_bits > 0);
 
 
 
@@ -94,13 +115,12 @@ Buffer* http_query(char *host, char *page, int port)
     exit(1);
   }
 
-  printf("Data: %s\n", http_file->data);
+  //printf("Data: %s\n", http_file->data);
 
   freeaddrinfo(servinfo);
   close(sockfd);
-
-
-  return 0;
+  http_file->length = file_size;
+  return http_file;
 }
 
 // split http content from the response string
