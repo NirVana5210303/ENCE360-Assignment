@@ -34,9 +34,9 @@ void append_buffer(Buffer *buffer, char *data, size_t length)
 
 Buffer* http_query(char *host, char *page, int port)
 {
-  printf("Host: %s\n", host);
-  printf("Page: %s\n", page);
-  printf("Port: %i\n", port);
+  //printf("Host: %s\n", host);
+  //printf("Page: %s\n", page);
+  //printf("Port: %i\n", port);
 
   char addr_port[20];
   int sockfd;
@@ -79,7 +79,7 @@ Buffer* http_query(char *host, char *page, int port)
     request = (char*)calloc(request_length, sizeof(char));
     sprintf(request, "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: downloader/1.0\r\n\r\n", page, host);
   }
-  printf("\n\n%s\n\n", request);
+  //printf("%s", request);
 
   int sent = 0;
   do {
@@ -104,12 +104,12 @@ Buffer* http_query(char *host, char *page, int port)
         http_file->length = http_file->length * 2;
         http_file->data = realloc(http_file->data, http_file->length);
     }
-    printf("%d bytes recv\n", rec_bits);
+    //printf("%d bytes recv\n", rec_bits);
   } while(rec_bits > 0);
 
 
 
-  printf("RC: %i\n", rc);
+  //printf("RC: %i\n", rc);
   if (rc == -1) {
     perror("recv");
     exit(1);
