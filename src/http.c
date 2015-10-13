@@ -22,22 +22,8 @@ Buffer *new_buffer(size_t size)
   return buffer;
 }
 
-void free_buffer(Buffer *buffer)
-{
-  return;
-}
-
-void append_buffer(Buffer *buffer, char *data, size_t length)
-{
-  return;
-}
-
 Buffer* http_query(char *host, char *page, int port)
 {
-  //printf("Host: %s\n", host);
-  //printf("Page: %s\n", page);
-  //printf("Port: %i\n", port);
-
   char addr_port[20];
   int sockfd;
   int status;
@@ -47,13 +33,20 @@ Buffer* http_query(char *host, char *page, int port)
   char *request = NULL;
   int request_length;
 
+  void clean_mem(void)
+  {
+    free(request);
+    free(http_file);
+    freeaddrinfo(servinfo);
+  }
 
   sprintf(addr_port, "%d", port);
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
 
-  if ((status = getaddrinfo(host, addr_port, &hints, &servinfo)) != 0) {
+  if ((status = getaddrinfo(host, addr_port, &hints, &servinfo)) != 0)
+  {
     fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
     exit(1);
   }
@@ -61,7 +54,8 @@ Buffer* http_query(char *host, char *page, int port)
   sockfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
   int rc = connect(sockfd, servinfo->ai_addr, servinfo->ai_addrlen);
-  if (rc == -1) {
+  if (rc == -1)
+  {
     perror("connect");
     exit(1);
   }
@@ -79,23 +73,24 @@ Buffer* http_query(char *host, char *page, int port)
     request = (char*)calloc(request_length, sizeof(char));
     sprintf(request, "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: downloader/1.0\r\n\r\n", page, host);
   }
-  //printf("%s", request);
 
   int sent = 0;
-  do {
+  do
+  {
   	rc = send(sockfd, request + sent, request_length - sent, 0);
-  	if (rc == -1) {
+  	if (rc == -1)
+    {
+      freeaddrinfo(servinfo);
+      close(sockfd);
   	  perror("send");
   	  exit(1);
   	}
   	sent += rc;
   } while (sent < request_length);
 
-
-
-  //char buffer[BUF_SIZE];
   int rec_bits;
-  do {
+  do
+  {
     rec_bits = recv(sockfd, http_file->data + file_size, BUF_SIZE, 0);
     file_size += rec_bits;
 
@@ -104,49 +99,56 @@ Buffer* http_query(char *host, char *page, int port)
         http_file->length = http_file->length * 2;
         http_file->data = realloc(http_file->data, http_file->length);
     }
-    //printf("%d bytes recv\n", rec_bits);
   } while(rec_bits > 0);
 
-
-
-  //printf("RC: %i\n", rc);
-  if (rc == -1) {
+  if (rec_bits == -1)
+  {
+    freeaddrinfo(servinfo);
+    close(sockfd);
+    free(http_file);
     perror("recv");
     exit(1);
   }
 
-  //printf("Data: %s\n", http_file->data);
-
   freeaddrinfo(servinfo);
   close(sockfd);
+  free(request);
   http_file->length = file_size;
   return http_file;
 }
 
 // split http content from the response string
-char* http_get_content(Buffer *response) {
+char* http_get_content(Buffer *response)
+{
 
   char* header_end = strstr(response->data, "\r\n\r\n");
 
-  if(header_end) {
+  if(header_end)
+  {
     return header_end + 4;
-  } else {
+  }
+  else
+  {
    return response->data;
   }
 }
 
 
-Buffer *http_url(const char *url) {
+Buffer *http_url(const char *url)
+{
   char host[BUF_SIZE];
   strncpy(host, url, BUF_SIZE);
 
   char *page = strstr(host, "/");
-  if(page) {
+  if(page)
+  {
     page[0] = '\0';
 
     ++page;
     return http_query(host, page, 80);
-  } else {
+  }
+  else
+  {
 
     fprintf(stderr, "could not split url into host/page %s\n", url);
     return NULL;
