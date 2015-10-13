@@ -147,7 +147,7 @@ void *queue_get(Queue *queue)
   }
   if (queue->spaces == 16)
   {
-    puts("not ideal");
+    //puts("not ideal");
   }
   //puts("queue_get");
   Node *node = queue->head;
