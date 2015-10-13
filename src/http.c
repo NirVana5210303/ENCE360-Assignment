@@ -1,4 +1,8 @@
-//TODO: add timeout for unreliable connections when reveiving
+/*
+Author: Gregory Kampjes
+
+TODO: add timeout for unreliable connections when rxing
+*/
 
 #include <stdio.h>
 #include <sys/socket.h>
@@ -22,6 +26,13 @@ Buffer *new_buffer(size_t size)
   return buffer;
 }
 
+// Clear the contents allocated to buffer, then clear buffer itself
+void clear_buffer(Buffer *buff)
+{
+  free(buff->data);
+  free(buff);
+}
+
 Buffer* http_query(char *host, char *page, int port)
 {
   char addr_port[20];
@@ -33,11 +44,13 @@ Buffer* http_query(char *host, char *page, int port)
   char *request = NULL;
   int request_length;
 
-  void clean_mem(void)
+  void exit_error(void) // function to clear memory in case of error
   {
     free(request);
-    free(http_file);
+    clear_buffer(http_file);
     freeaddrinfo(servinfo);
+    free(&hints);
+    exit(1);
   }
 
   sprintf(addr_port, "%d", port);
@@ -48,26 +61,24 @@ Buffer* http_query(char *host, char *page, int port)
   if ((status = getaddrinfo(host, addr_port, &hints, &servinfo)) != 0)
   {
     fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-    exit(1);
+    exit_error();
   }
-
   sockfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
-
   int rc = connect(sockfd, servinfo->ai_addr, servinfo->ai_addrlen);
   if (rc == -1)
   {
     perror("connect");
-    exit(1);
+    exit_error();
   }
 
-  //"GET /sqlrest/CUSTOMER/3/ HTTP/1.0\r\nHost: www.thomas-bayer.com\r\nUser-Agent: downloader/1.0\r\n\r\n";
+  // "GET /sqlrest/CUSTOMER/3/ HTTP/1.0\r\nHost: www.thomas-bayer.com\r\nUser-Agent: downloader/1.0\r\n\r\n";
   if (page[0] == '/')
   {
     request_length = REQ_LEN + strlen(host) + strlen (page);
     request = (char*)calloc(request_length, sizeof(char));
     sprintf(request, "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: downloader/1.0\r\n\r\n", page, host);
   }
-  else
+  else // Due to the way that the strings are split in memory, it can lose a slash
   {
     request_length = REQ_LEN + strlen(host) + strlen (page) + 1;
     request = (char*)calloc(request_length, sizeof(char));
@@ -75,44 +86,47 @@ Buffer* http_query(char *host, char *page, int port)
   }
 
   int sent = 0;
-  do
+  do // Just in case the request gets fragmented when being sent
   {
-  	rc = send(sockfd, request + sent, request_length - sent, 0);
-  	if (rc == -1)
+  	sent = send(sockfd, request + sent, request_length - sent, 0);
+  	if (sent == -1)
     {
-      freeaddrinfo(servinfo);
       close(sockfd);
   	  perror("send");
-  	  exit(1);
+  	  exit_error();
   	}
-  	sent += rc;
+  	sent += sent;
   } while (sent < request_length);
 
-  int rec_bits;
+  int recv_bits;
   do
   {
-    rec_bits = recv(sockfd, http_file->data + file_size, BUF_SIZE, 0);
-    file_size += rec_bits;
+    recv_bits = recv(sockfd, http_file->data + file_size, BUF_SIZE, 0);
+    file_size += recv_bits;
 
     if (file_size + BUF_SIZE > http_file->length)
     {
-        http_file->length = http_file->length * 2;
-        http_file->data = realloc(http_file->data, http_file->length);
+      // Someone smarter than me said that you should double allocated size when
+      // resizing. I believe them.
+      http_file->length = http_file->length * 2;
+      http_file->data = realloc(http_file->data, http_file->length);
     }
-  } while(rec_bits > 0);
+  } while(recv_bits > 0); // When there is no data left, it will recv 0 bits
 
-  if (rec_bits == -1)
+  if (recv_bits == -1) // Something went wrong
   {
-    freeaddrinfo(servinfo);
-    close(sockfd);
-    free(http_file);
     perror("recv");
-    exit(1);
+    exit_error();
   }
 
-  freeaddrinfo(servinfo);
+  // Cleanup
   close(sockfd);
   free(request);
+  freeaddrinfo(servinfo);
+  /*
+  Setting the length of the length to the size of the file, so that the
+  downloader doesn't break.
+  */
   http_file->length = file_size;
   return http_file;
 }
@@ -120,7 +134,6 @@ Buffer* http_query(char *host, char *page, int port)
 // split http content from the response string
 char* http_get_content(Buffer *response)
 {
-
   char* header_end = strstr(response->data, "\r\n\r\n");
 
   if(header_end)
@@ -143,13 +156,11 @@ Buffer *http_url(const char *url)
   if(page)
   {
     page[0] = '\0';
-
     ++page;
     return http_query(host, page, 80);
   }
   else
   {
-
     fprintf(stderr, "could not split url into host/page %s\n", url);
     return NULL;
   }
